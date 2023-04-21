@@ -1,6 +1,7 @@
 package com.example.treespotter_firebase
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
@@ -14,9 +15,11 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationServices
+import com.google.android.gms.maps.CameraUpdateFactory
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
+import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.Marker
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.snackbar.Snackbar
@@ -29,7 +32,7 @@ class TreeMapFragment : Fragment() {
 
     private var locationPermissionGranted = false
 
-    private var moveMapToUsersLocation = false
+    private var movedMapToUsersLocation = false
 
     private var fusedLocationProvider: FusedLocationProviderClient? = null
 
@@ -51,10 +54,14 @@ class TreeMapFragment : Fragment() {
     }
 
     private fun updateMap() {
+
         //todo draw markers
-        //draw blue dot at user's localtion
-        //show no location message if location permission not granted
-        //or device does not have location enabled.
+
+        if (locationPermissionGranted) {
+            if (!movedMapToUsersLocation) {
+                moveMapToUserLocation()
+            }
+        }
     }
 
 
@@ -84,16 +91,20 @@ class TreeMapFragment : Fragment() {
             locationPermissionGranted = true
             Log.d(TAG, "permission already granted")
             updateMap()
+            fusedLocationProvider = LocationServices.getFusedLocationProviderClient(requireActivity())
+
         } else {
             //need to ask for perm
             val requestLocationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
                 if (granted) {
                 Log.d(TAG, "User granted permission")
                 setAddTreeButtonEnabled(true)
+                    locationPermissionGranted = true
                 fusedLocationProvider = LocationServices.getFusedLocationProviderClient(requireActivity())
             } else {
                 Log.d(TAG, "user granted no permission")
                 setAddTreeButtonEnabled(false)
+                    locationPermissionGranted = false
                 showSnackbar(getString(R.string.give_permission))
             }
 
@@ -103,6 +114,31 @@ class TreeMapFragment : Fragment() {
         }
     }
 
+    @SuppressLint("MissingPermission")
+    private fun moveMapToUserLocation() {
+
+        if (map == null) {
+            return
+        }
+
+        if (locationPermissionGranted) {
+            map?.isMyLocationEnabled = true
+            map?.uiSettings?.isMyLocationButtonEnabled = true
+
+            fusedLocationProvider?.lastLocation?.addOnCompleteListener { getLocationTask ->
+                val location = getLocationTask.result
+                if (location != null) {
+                    Log.d(TAG, "User's location $location")
+                    val center = LatLng(location.latitude, location.longitude)
+                    val zoomLevel = 8f
+                    map?.moveCamera(CameraUpdateFactory.newLatLngZoom(center, zoomLevel))
+                    movedMapToUsersLocation = true
+                } else {
+                    showSnackbar(getString(R.string.no_location))
+                }
+            }
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -119,11 +155,11 @@ class TreeMapFragment : Fragment() {
         val mapFragment = childFragmentManager.findFragmentById(R.id.map_view) as SupportMapFragment
         mapFragment?.getMapAsync(mapReadyCallback)
 
-        // request user's permission to accesss device location
-        requestLocationPermission()
-
         // disable add tree button until location is available
         setAddTreeButtonEnabled(false)
+
+        // request user's permission to accesss device location
+        requestLocationPermission()
 
         //todo draw existing trees on map
 
