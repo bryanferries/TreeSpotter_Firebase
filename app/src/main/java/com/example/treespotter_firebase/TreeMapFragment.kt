@@ -1,18 +1,25 @@
 package com.example.treespotter_firebase
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
 import com.google.android.gms.maps.GoogleMap
 import com.google.android.gms.maps.OnMapReadyCallback
 import com.google.android.gms.maps.SupportMapFragment
 import com.google.android.gms.maps.model.Marker
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.android.material.snackbar.Snackbar
 
 private const val TAG = "TREE_MAP_FRAGMENT"
 
@@ -51,6 +58,52 @@ class TreeMapFragment : Fragment() {
     }
 
 
+    private fun setAddTreeButtonEnabled(isEnabled: Boolean) {
+        addTreeButton.isClickable = isEnabled
+        addTreeButton.isEnabled = isEnabled
+
+        if (isEnabled) {
+            addTreeButton.backgroundTintList = AppCompatResources.getColorStateList(requireActivity(),
+                android.R.color.holo_green_light)
+        } else {
+            addTreeButton.backgroundTintList = AppCompatResources.getColorStateList(requireActivity(),
+                android.R.color.darker_gray)
+        }
+    }
+
+
+    private fun showSnackbar(message: String) {
+        Snackbar.make(requireView(), message, Snackbar.LENGTH_LONG).show()
+    }
+
+    private fun requestLocationPermission() {
+        //has user already granted perm??
+        if (ContextCompat.checkSelfPermission(requireActivity(),
+                Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+
+            locationPermissionGranted = true
+            Log.d(TAG, "permission already granted")
+            updateMap()
+        } else {
+            //need to ask for perm
+            val requestLocationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                if (granted) {
+                Log.d(TAG, "User granted permission")
+                setAddTreeButtonEnabled(true)
+                fusedLocationProvider = LocationServices.getFusedLocationProviderClient(requireActivity())
+            } else {
+                Log.d(TAG, "user granted no permission")
+                setAddTreeButtonEnabled(false)
+                showSnackbar(getString(R.string.give_permission))
+            }
+
+        }
+
+            requestLocationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -66,9 +119,11 @@ class TreeMapFragment : Fragment() {
         val mapFragment = childFragmentManager.findFragmentById(R.id.map_view) as SupportMapFragment
         mapFragment?.getMapAsync(mapReadyCallback)
 
-        //todo request user's permission to accesss device location
+        // request user's permission to accesss device location
+        requestLocationPermission()
 
-        //todo disable add tree button until location is available
+        // disable add tree button until location is available
+        setAddTreeButtonEnabled(false)
 
         //todo draw existing trees on map
 
